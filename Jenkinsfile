@@ -1,11 +1,11 @@
 def label = "slave-${UUID.randomUUID().toString()}"
 
 podTemplate(label: label, containers: [
-    containerTemplate(name: 'maven', image: 'maven', command: 'cat', ttyEnabled: true)
-    containerTemplate(name: 'docker', image: 'docker:latest', command: 'cat', ttyEnabled: true)
-    containerTemplate(name: 'helm', image: 'helm:latest', command: 'cat', ttyEnabled: true)
-    containerTemplate(name: 'kubectl', image: 'kubectl:latest', command: 'cat', ttyEnabled: true)
-    containerTemplate(name: 'sonar', image: 'sonar:latest', command: 'cat', ttyEnabled: true)
+    containerTemplate(name: 'maven', image: 'maven', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'docker', image: 'docker:latest', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'helm', image: 'helm:latest', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'kubectl', image: 'kubectl:latest', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'sonar', image: 'sonar:latest', command: 'cat', ttyEnabled: true),
     containerTemplate(name: 'yapi', image: 'yapi:latest', command: 'cat', ttyEnabled: true)
 ], volumes: [
     hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock'),
