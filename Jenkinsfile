@@ -1,4 +1,6 @@
-podTemplate(containers: [
+def label = "slave-${UUID.randomUUID().toString()}"
+
+podTemplate(label: label, containers: [
     containerTemplate(name: 'maven', image: 'maven', command: 'cat', ttyEnabled: true)
     containerTemplate(name: 'docker', image: 'docker:latest', command: 'cat', ttyEnabled: true)
     containerTemplate(name: 'helm', image: 'helm:latest', command: 'cat', ttyEnabled: true)
@@ -10,7 +12,7 @@ podTemplate(containers: [
     hostPathVolume(mountPath: '/home/jenkins/.kube', hostPath: '/root/.kube'),
     hostPathVolume(mountPath: '/root/.m2', hostPath: '/var/run/m2'),
 ]) {
-node {
+node(label) {
     def myRepo = checkout scm
     def a = myRepo.GIT_BRANCH
     def b = myRepo.GIT_COMMIT
@@ -21,4 +23,3 @@ node {
     println(a,b,c,d,e,f)
     }
 }
-
