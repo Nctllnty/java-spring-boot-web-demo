@@ -1,0 +1,106 @@
+def label = "slave-${UUID.randomUUID().toString()}"
+
+podTemplate(label: label, containers: [
+    containerTemplate(name: 'maven', image: 'maven', command: 'cat', ttyEnabled: true)
+    containerTemplate(name: 'docker', image: 'docker:latest', command: 'cat', ttyEnabled: true)
+    containerTemplate(name: 'helm', image: 'helm:latest', command: 'cat', ttyEnabled: true)
+    containerTemplate(name: 'kubectl', image: 'kubectl:latest', command: 'cat', ttyEnabled: true)
+    containerTemplate(name: 'sonar', image: 'sonar:latest', command: 'cat', ttyEnabled: true)
+    containerTemplate(name: 'yapi', image: 'yapi:latest', command: 'cat', ttyEnabled: true)
+], volumes: [
+    hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock'),
+    hostPathVolume(mountPath: '/home/jenkins/.kube', hostPath: '/root/.kube'),
+    hostPathVolume(mountPath: '/root/.m2', hostPath: '/var/run/m2'),
+]) {
+node(label) {
+    # 需要使用到的全局变量，可以通过参数化构建来传入
+    // def appName = ""
+    // def projectName = ""
+    // def imageName = ""
+    // def appVersion = ""
+    def myRepo = checkout scm
+    def gitCommit = myRepo.GIT_COMMIT
+    def branch = myRepo.GIT_BRANCH        #根据不同的branch/tag指定不同的环境进行构建
+    def imageTag = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+    def regUrl = "reg.example.com"
+    if (branch==null || branch=="") {
+        currentBuild.result = 'FAILURE'
+        error('须指定正确的分支')
+    }
+    else if (branch=="master") {
+        def kube_config = "kube-dit"
+    }
+    else {
+        def kube_config = "kube-sit"
+    }
+    
+    stage('代码打包编译') {
+        try {
+            container('maven') {
+                echo '开始代码打包编译'
+                sh "mvn clean package -f pom_exec_jar.xml -DskipTests=true" 
+            }
+        } catch (exc) {
+          println "构建失败 - ${currentBuild.fullDisplayName}"
+          throw(exc)
+        }
+
+    }
+
+    stage('静态测试') {
+        echo '测试'
+        container('sonar') {
+            sh '''
+            rm -rf /var/src
+            ln -s `pwd` /var/src
+            sonar-scanner
+            '''
+        }
+    }
+    
+    stage('构建Docker镜像') {
+        # 需要事先在jenkisn中创建相关凭据
+        withCredentials([usernamePassword(credentialsId: 'reg', passwordVariable: 'dockerHubPassWord', usernameVariable: 'dockerHubUser')]) {
+            container('docker') {
+            echo '开始构建Docker镜像'
+            sh """
+                docker login reg.example.com -u${dockerHubUser} -p${dockerHubPassWord}
+                docker build -t ${regUrl}/project/app:${imageTag}
+                docker push ${regUrl}/project/app:${imageTag}
+            """
+            }
+        }
+    }
+    stage('运行Helm安装应用到dit集群') {
+        # 需要传入的参数 1.appName 2.appVersion 3.chartVersion
+        container('helm') {
+            echo '运行Helm安装应用阶段'
+            # 构建helm
+            sh """
+                docker login reg.example.com -u${dockerHubUser} -p${dockerHubPassWord}s
+                # 创建模板
+                helm create app
+                sed -i 's/repository: nginx/repository: ${appName}/'
+                sed -i 's/tag: ""/tag: "${imageTag}"/'
+                sed -i 's/name: ""/name: "${appName}"/'
+                sed -i 's/port: 80/port: 8080/'
+                helm package --app-version=${appVersion} --version=${appVersion} ${appName}" //TODO
+                tar xzvf ${appName}-${chartVersion}.tgz
+                helm chart save ${appName} ${regUrl}/${project}/${appName}:${branch}
+                helm chart push ${regUrl}/${project}/${appName}:${branch}
+            """
+            #根据环境部署helm
+            sh("helm install  ${appName} ${appName} -n ${project} --kubeconfig=${kube_config}")  // --wait --cleanup-on-fail
+        }
+    }
+    stage('yapi接口测试') {
+        echo '测试'
+        # dosomething
+        container('yapi') {
+            sh '''
+                TODO
+            '''
+        }
+    }
+}
+}
